@@ -114,6 +114,8 @@ pub fn native_install(
     let env = get_host_environment()?;
 
     let version = &input.context.version;
+    let sdk_path = virtual_path!(buf, get_dotnet_root(&env)?.join("sdk"));
+    // info!("installing .NET SDK {version} to {sdk_path:?}");
 
     let is_windows = env.os.is_windows();
     let script_path = PathBuf::from("/proto/temp").join(if is_windows {
@@ -135,6 +137,12 @@ pub fn native_install(
             )?
             .body(),
         )?;
+    }
+    // 由于 proto 提前创建了目录导致 dotnet-install.sh 认为已经安装
+    // 所以执行之前先把这个目录扬了
+    if sdk_path.exists() {
+        fs::remove_dir_all(&sdk_path)?;
+        info!("removed existing SDK directory {sdk_path:?} to prevent script error")
     }
 
     let command_output = exec_command!(
