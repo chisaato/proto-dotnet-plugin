@@ -13,6 +13,8 @@ use crate::{
 extern "ExtismHost" {
     fn exec_command(input: Json<ExecCommandInput>) -> Json<ExecCommandOutput>;
     fn to_virtual_path(input: String) -> String;
+    fn host_log(input: Json<HostLogInput>);
+
 }
 
 static NAME: &str = ".NET";
@@ -46,7 +48,7 @@ pub fn register_tool(Json(_): Json<ToolMetadataInput>) -> FnResult<Json<ToolMeta
 #[plugin_fn]
 pub fn load_versions(Json(_): Json<LoadVersionsInput>) -> FnResult<Json<LoadVersionsOutput>> {
     // we previously used the dotnet/sdk repo here as it included v2, but all prerelease versions were slightly off
-    let versions = load_git_tags("https://github.com/dotnet/installer")?
+    let versions = load_git_tags("https://github.com/dotnet/sdk")?
         .iter()
         .filter_map(|tag| tag.strip_prefix("v"))
         .filter(|tag| !tag.is_empty())
@@ -115,7 +117,9 @@ pub fn native_install(
 
     let version = &input.context.version;
     let sdk_path = virtual_path!(buf, get_dotnet_root(&env)?.join("sdk"));
-    // info!("installing .NET SDK {version} to {sdk_path:?}");
+    let sdk_ver_path= sdk_path.join(&version.to_string());
+    let sdk_dll_path = sdk_ver_path.join("dotnet.dll");
+    info!("installing .NET SDK {version} to {sdk_path:?}");
 
     let is_windows = env.os.is_windows();
     let script_path = PathBuf::from("/proto/temp").join(if is_windows {
@@ -140,9 +144,9 @@ pub fn native_install(
     }
     // 由于 proto 提前创建了目录导致 dotnet-install.sh 认为已经安装
     // 所以执行之前先把这个目录扬了
-    if sdk_path.exists() {
-        fs::remove_dir_all(&sdk_path)?;
-        info!("removed existing SDK directory {sdk_path:?} to prevent script error")
+    if sdk_ver_path.exists() {
+       let result= fs::remove_dir(&sdk_ver_path)?;
+        info!("removed existing SDK directory {sdk_ver_path:?} to prevent script error")
     }
 
     let command_output = exec_command!(
